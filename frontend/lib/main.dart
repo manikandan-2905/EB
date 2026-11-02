@@ -22,7 +22,7 @@ class EbWiremanApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EB Wireman Assistant',
+      title: 'EB Houses',
       debugShowCheckedModeBanner: false,
 
       // ── Modern Light Theme ───────────────────────────────────────────

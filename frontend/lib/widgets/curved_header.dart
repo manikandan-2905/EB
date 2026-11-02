@@ -56,26 +56,36 @@ class CurvedHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // User Avatar / Custom Leading
+                  // App Logo / Custom Leading
                   leading ??
                       Container(
-                        width: 46,
-                        height: 46,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.4),
-                            width: 1.5,
+                            color: Colors.white.withValues(alpha: 0.5),
+                            width: 1.8,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        child: const Center(
-                          child: Text(
-                            'M',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/logo/app_logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              child: const Icon(
+                                Icons.bolt_rounded,
+                                color: Color(0xFFFFD54F),
+                                size: 28,
+                              ),
                             ),
                           ),
                         ),

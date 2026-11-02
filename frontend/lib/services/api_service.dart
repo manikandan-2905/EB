@@ -9,8 +9,8 @@ class ApiService {
   // ── Base URL ──────────────────────────────────────────────────────────────
   // For Android emulator use 10.0.2.2 to reach the host machine's localhost.
   // For a physical device replace with your machine's local IP (e.g. 192.168.1.X).
-  static const String _baseUrl = 'http://10.0.2.2:5000/api';
-
+  // static const String _baseUrl = 'http://10.0.2.2:5000/api';
+   static const String _baseUrl = 'https://eb-nz5b.onrender.com/api';
   static const Duration _timeout = Duration(seconds: 15);
 
   // ─────────────────────────────────────────────────────────────────────────
