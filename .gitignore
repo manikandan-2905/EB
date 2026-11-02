@@ -1,0 +1,30 @@
+# Archives & Backups
+*.zip
+*.tar.gz
+*.rar
+EB.zip
+
+# Environment & Credentials
+.env
+.env.*
+!.env.example
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# Android build outputs & caches
+.gradle/
+local.properties
+**/android/build/
+**/android/.gradle/
+**/android/app/build/
+**/android/captures/
+**/android/.cxx/
