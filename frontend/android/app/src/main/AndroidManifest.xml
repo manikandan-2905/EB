@@ -6,9 +6,19 @@
 
     <!-- ── Internet Permission (for backend API calls) ───────────────────── -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
 
     <!-- ── Required for url_launcher on Android 11+ (must be child of <manifest>) ── -->
     <queries>
+        <!-- Phone dialer / call intent -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
         <!-- Google Maps geo intent -->
         <intent>
             <action android:name="android.intent.action.VIEW" />

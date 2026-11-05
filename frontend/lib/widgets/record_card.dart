@@ -148,25 +148,32 @@ class _RecordCardState extends State<RecordCard> {
   // ── Dial Consumer Mobile Number ─────────────────────────────────────────
   Future<void> _callNumber(BuildContext context, String number) async {
     HapticFeedback.lightImpact();
-    final clean = number.replaceAll(RegExp(r'\s+'), '');
-    final uri = Uri.parse('tel:$clean');
+    final clean = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (clean.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No valid phone number available to call.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final uri = Uri(scheme: 'tel', path: clean);
     try {
-      if (await canLaunchUrl(uri)) {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
         await launchUrl(uri);
-      } else {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open phone dialer for $clean'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       }
-    } catch (_) {
+    } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not initiate call to $clean'),
+          content: Text('Could not open phone dialer: ${e.toString()}'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -405,82 +412,72 @@ class _RecordCardState extends State<RecordCard> {
               message: record.mobileNumber.isNotEmpty
                   ? 'Call ${record.mobileNumber}'
                   : 'No phone number registered',
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    if (record.mobileNumber.isNotEmpty) {
-                      _callNumber(context, record.mobileNumber);
-                    } else {
-                      HapticFeedback.heavyImpact();
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Row(
-                            children: [
-                              Icon(
-                                Icons.phone_disabled_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text('No phone number registered for this consumer.'),
-                            ],
-                          ),
-                          backgroundColor: const Color(0xFF1E293B),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: record.mobileNumber.isNotEmpty
-                          ? const Color(0xFF16A34A).withValues(alpha: 0.12)
-                          : const Color(0xFF94A3B8).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.call_rounded,
-                      size: 17,
-                      color: record.mobileNumber.isNotEmpty
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFF94A3B8),
-                    ),
-                  ),
+              child: IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: record.mobileNumber.isNotEmpty
+                      ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                      : const Color(0xFF94A3B8).withValues(alpha: 0.1),
+                  padding: const EdgeInsets.all(7),
+                  minimumSize: const Size(34, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+                icon: Icon(
+                  Icons.call_rounded,
+                  size: 17,
+                  color: record.mobileNumber.isNotEmpty
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFF94A3B8),
+                ),
+                onPressed: () {
+                  if (record.mobileNumber.isNotEmpty) {
+                    _callNumber(context, record.mobileNumber);
+                  } else {
+                    HapticFeedback.heavyImpact();
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Row(
+                          children: [
+                            Icon(
+                              Icons.phone_disabled_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Text('No phone number registered for this consumer.'),
+                          ],
+                        ),
+                        backgroundColor: const Color(0xFF1E293B),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
               ),
             ),
 
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
 
             // 4. Quick Directions Icon (One-click navigation without expanding)
             Tooltip(
               message: 'Get Directions',
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _navigate(context),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1565C0).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.directions_rounded,
-                      size: 18,
-                      color: Color(0xFF1565C0),
-                    ),
-                  ),
+              child: IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.1),
+                  padding: const EdgeInsets.all(7),
+                  minimumSize: const Size(34, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+                icon: const Icon(
+                  Icons.directions_rounded,
+                  size: 18,
+                  color: Color(0xFF1565C0),
+                ),
+                onPressed: () => _navigate(context),
               ),
             ),
 
