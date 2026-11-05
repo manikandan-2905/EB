@@ -1,4 +1,4 @@
-name: EB Houses
+name: eb_wireman_app
 description: EB Wireman Assistant — save and navigate to electricity consumer service locations.
 publish_to: 'none'
 version: 1.0.0+1

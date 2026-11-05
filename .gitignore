@@ -2,6 +2,7 @@
 *.zip
 *.tar.gz
 *.rar
+*.apk
 EB.zip
 
 # Environment & Credentials
