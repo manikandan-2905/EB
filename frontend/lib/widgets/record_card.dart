@@ -3,8 +3,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/eb_record.dart';
+import '../screens/add_record_screen.dart';
 import '../services/api_service.dart';
 import '../services/maps_service.dart';
 import 'schedule_dialog.dart';
@@ -13,6 +15,7 @@ class RecordCard extends StatefulWidget {
   final EbRecord record;
   final VoidCallback onDeleted;
   final VoidCallback? onScheduleUpdated;
+  final VoidCallback? onRecordUpdated;
   final int index;
   final bool initiallyExpanded;
 
@@ -21,6 +24,7 @@ class RecordCard extends StatefulWidget {
     required this.record,
     required this.onDeleted,
     this.onScheduleUpdated,
+    this.onRecordUpdated,
     this.index = 0,
     this.initiallyExpanded = false,
   });
@@ -118,6 +122,55 @@ class _RecordCardState extends State<RecordCard> {
         }
       },
     );
+  }
+
+  // ── Open Edit Record Screen ──────────────────────────────────────────────
+  Future<void> _openEdit(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddRecordScreen(
+          recordToEdit: record,
+          onRecordSaved: () {
+            widget.onRecordUpdated?.call();
+            widget.onScheduleUpdated?.call();
+          },
+        ),
+      ),
+    );
+    if (updated == true) {
+      widget.onRecordUpdated?.call();
+      widget.onScheduleUpdated?.call();
+    }
+  }
+
+  // ── Dial Consumer Mobile Number ─────────────────────────────────────────
+  Future<void> _callNumber(BuildContext context, String number) async {
+    HapticFeedback.lightImpact();
+    final clean = number.replaceAll(RegExp(r'\s+'), '');
+    final uri = Uri.parse('tel:$clean');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open phone dialer for $clean'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not initiate call to $clean'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // ── Confirm and delete ─────────────────────────────────────────────────
@@ -347,7 +400,67 @@ class _RecordCardState extends State<RecordCard> {
 
             const Spacer(),
 
-            // 3. Quick Directions Icon (One-click navigation without expanding)
+            // 3. Quick Call Icon (One-click direct phone call)
+            Tooltip(
+              message: record.mobileNumber.isNotEmpty
+                  ? 'Call ${record.mobileNumber}'
+                  : 'No phone number registered',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    if (record.mobileNumber.isNotEmpty) {
+                      _callNumber(context, record.mobileNumber);
+                    } else {
+                      HapticFeedback.heavyImpact();
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Row(
+                            children: [
+                              Icon(
+                                Icons.phone_disabled_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text('No phone number registered for this consumer.'),
+                            ],
+                          ),
+                          backgroundColor: const Color(0xFF1E293B),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: record.mobileNumber.isNotEmpty
+                          ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                          : const Color(0xFF94A3B8).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.call_rounded,
+                      size: 17,
+                      color: record.mobileNumber.isNotEmpty
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 6),
+
+            // 4. Quick Directions Icon (One-click navigation without expanding)
             Tooltip(
               message: 'Get Directions',
               child: Material(
@@ -373,7 +486,7 @@ class _RecordCardState extends State<RecordCard> {
 
             const SizedBox(width: 6),
 
-            // 4. Expand / Collapse Arrow
+            // 5. Expand / Collapse Arrow
             AnimatedRotation(
               turns: _isExpanded ? 0.5 : 0.0,
               duration: const Duration(milliseconds: 200),
@@ -388,7 +501,7 @@ class _RecordCardState extends State<RecordCard> {
 
         const SizedBox(height: 8),
 
-        // 5. Consumer Name
+        // Consumer Name
         Text(
           record.consumerName.isNotEmpty ? record.consumerName : 'Consumer (No Name)',
           style: TextStyle(
@@ -624,9 +737,79 @@ class _RecordCardState extends State<RecordCard> {
           ],
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
-        // ── Main Action: Full-Width Navigation Button ────────────────────────
+        // ── Consumer Mobile Number (Phone Icon with Direct Call) ─────────────
+        if (record.mobileNumber.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.phone_in_talk_rounded,
+                  size: 17,
+                  color: Color(0xFF16A34A),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Consumer Mobile',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF15803D),
+                      ),
+                    ),
+                    Text(
+                      record.mobileNumber,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF14532D),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () => _callNumber(context, record.mobileNumber),
+                  icon: const Icon(Icons.call, size: 13, color: Colors.white),
+                  label: const Text(
+                    'Call',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+
+        // ── Main Action: Full-Width Google Maps Directions Button ────────────
         InkWell(
           onTap: () => _navigate(context),
           borderRadius: BorderRadius.circular(12),
@@ -675,14 +858,16 @@ class _RecordCardState extends State<RecordCard> {
 
         const SizedBox(height: 8),
 
-        // ── Secondary Actions: Schedule & Delete ─────────────────────────────
+        // ── Secondary Actions: Schedule first, then Edit, then Delete ────────
         Row(
           children: [
+            // 1. Schedule Button (First)
             Expanded(
+              flex: 4,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  side: const BorderSide(color: Color(0xFF1565C0)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -692,11 +877,11 @@ class _RecordCardState extends State<RecordCard> {
                   record.isScheduled
                       ? Icons.event_available_rounded
                       : Icons.edit_calendar_rounded,
-                  size: 16,
+                  size: 15,
                   color: const Color(0xFF1565C0),
                 ),
                 label: Text(
-                  record.isScheduled ? 'Reschedule' : 'Schedule Visit',
+                  record.isScheduled ? 'Reschedule' : 'Schedule',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -706,9 +891,40 @@ class _RecordCardState extends State<RecordCard> {
               ),
             ),
             const SizedBox(width: 8),
+
+            // 2. Edit Button (Second)
+            Expanded(
+              flex: 3,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () => _openEdit(context),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 15,
+                  color: Color(0xFF475569),
+                ),
+                label: const Text(
+                  'Edit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // 3. Delete Button (Third)
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                 side: BorderSide(color: Colors.red.shade200),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -717,7 +933,7 @@ class _RecordCardState extends State<RecordCard> {
               onPressed: () => _confirmDelete(context),
               icon: Icon(
                 Icons.delete_outline_rounded,
-                size: 16,
+                size: 15,
                 color: Colors.red.shade600,
               ),
               label: Text(

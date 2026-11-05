@@ -9,6 +9,7 @@ const router = express.Router();
 const {
   checkEbNumber,
   createRecord,
+  updateRecord,
   updateSchedule,
   getScheduledRecords,
   searchRecords,
@@ -34,6 +35,35 @@ const createRecordValidation = [
   body('consumerName')
     .optional()
     .isLength({ max: 100 }).withMessage('Consumer name must be at most 100 characters.'),
+
+  body('mobileNumber')
+    .optional()
+    .isLength({ max: 20 }).withMessage('Mobile number must be at most 20 characters.'),
+
+  body('landmarkNotes')
+    .optional()
+    .isLength({ max: 300 }).withMessage('Landmark notes must be at most 300 characters.'),
+
+  body('address')
+    .optional()
+    .isLength({ max: 500 }).withMessage('Address must be at most 500 characters.'),
+
+  body('scheduledDate')
+    .optional(),
+];
+
+const updateRecordValidation = [
+  body('ebNumber')
+    .optional()
+    .isLength({ min: 3, max: 30 }).withMessage('EB Number must be between 3 and 30 characters.'),
+
+  body('consumerName')
+    .optional()
+    .isLength({ max: 100 }).withMessage('Consumer name must be at most 100 characters.'),
+
+  body('mobileNumber')
+    .optional()
+    .isLength({ max: 20 }).withMessage('Mobile number must be at most 20 characters.'),
 
   body('landmarkNotes')
     .optional()
@@ -63,6 +93,10 @@ router.get('/', getLatestRecords);
 
 // POST /api/eb-records  — create unique record
 router.post('/', createRecordValidation, createRecord);
+
+// PUT / PATCH /api/eb-records/:id — update existing record
+router.put('/:id', updateRecordValidation, updateRecord);
+router.patch('/:id', updateRecordValidation, updateRecord);
 
 // PATCH / PUT /api/eb-records/:id/schedule — schedule a visit
 router.patch('/:id/schedule', updateSchedule);

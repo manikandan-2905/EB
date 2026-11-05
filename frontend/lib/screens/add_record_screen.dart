@@ -13,10 +13,12 @@ import '../widgets/curved_header.dart';
 import '../widgets/eb_number_formatter.dart';
 
 class AddRecordScreen extends StatefulWidget {
+  final EbRecord? recordToEdit;
   final VoidCallback? onRecordSaved;
 
   const AddRecordScreen({
     super.key,
+    this.recordToEdit,
     this.onRecordSaved,
   });
 
@@ -29,6 +31,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   final _ebNumberController = TextEditingController();
   final _addressController = TextEditingController();
   final _consumerNameController = TextEditingController();
+  final _mobileController = TextEditingController();
   final _notesController = TextEditingController();
 
   Position? _position;
@@ -37,6 +40,8 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
   DateTime? _scheduledDate;
 
+  bool get isEditMode => widget.recordToEdit != null;
+
   // Uniqueness check state
   bool _isCheckingEb = false;
   bool? _isEbDuplicate;
@@ -44,11 +49,38 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
   Timer? _ebDebounceTimer;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.recordToEdit != null) {
+      final rec = widget.recordToEdit!;
+      _ebNumberController.text = rec.ebNumber;
+      _consumerNameController.text = rec.consumerName;
+      _mobileController.text = rec.mobileNumber;
+      _addressController.text = rec.address;
+      _notesController.text = rec.landmarkNotes;
+      _scheduledDate = rec.scheduledDate;
+      _position = Position(
+        latitude: rec.latitude,
+        longitude: rec.longitude,
+        timestamp: DateTime.now(),
+        accuracy: 0.0,
+        altitude: 0.0,
+        altitudeAccuracy: 0.0,
+        heading: 0.0,
+        headingAccuracy: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+      );
+    }
+  }
+
+  @override
   void dispose() {
     _ebDebounceTimer?.cancel();
     _ebNumberController.dispose();
     _addressController.dispose();
     _consumerNameController.dispose();
+    _mobileController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -156,11 +188,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     }
   }
 
-  // ── Save Record ────────────────────────────────────────────────────────────
+  // ── Save / Update Record ───────────────────────────────────────────────────
   Future<void> _saveRecord() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_isEbDuplicate == true) {
+    if (!isEditMode && _isEbDuplicate == true) {
       HapticFeedback.heavyImpact();
       _showSnack(
         'Duplicate EB Number! Please enter a unique EB number.',
@@ -179,20 +211,32 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
     try {
       final record = EbRecord(
+        id: widget.recordToEdit?.id,
         ebNumber: _ebNumberController.text.trim(),
         consumerName: _consumerNameController.text.trim(),
+        mobileNumber: _mobileController.text.trim(),
         landmarkNotes: _notesController.text.trim(),
         latitude: _position!.latitude,
         longitude: _position!.longitude,
         address: _addressController.text.trim(),
         scheduledDate: _scheduledDate,
-        visitStatus: _scheduledDate != null ? 'Pending' : 'Pending',
+        visitStatus: widget.recordToEdit?.visitStatus ?? (_scheduledDate != null ? 'Pending' : 'Pending'),
       );
 
-      await ApiService.saveRecord(record);
-      HapticFeedback.mediumImpact();
-      _showSnack('EB Record registered successfully!');
-      _resetForm();
+      if (isEditMode) {
+        if (widget.recordToEdit?.id == null) {
+          throw const ApiException('Invalid record ID for update.');
+        }
+        await ApiService.updateRecord(widget.recordToEdit!.id!, record);
+        HapticFeedback.mediumImpact();
+        _showSnack('EB Record updated successfully!');
+      } else {
+        await ApiService.saveRecord(record);
+        HapticFeedback.mediumImpact();
+        _showSnack('EB Record registered successfully!');
+        _resetForm();
+      }
+
       widget.onRecordSaved?.call();
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context, true);
@@ -213,6 +257,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
     _ebNumberController.clear();
     _addressController.clear();
     _consumerNameController.clear();
+    _mobileController.clear();
     _notesController.clear();
     setState(() {
       _position = null;
@@ -330,13 +375,17 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                 onPressed: () => Navigator.maybePop(context),
               ),
             ),
-            greeting: 'New Service Meter',
-            currentLocation: 'Fill consumer & address details',
-            trailing: IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-              tooltip: 'Clear form',
-              onPressed: _resetForm,
-            ),
+            greeting: isEditMode ? 'Edit Consumer' : 'New Service Meter',
+            currentLocation: isEditMode
+                ? 'Update consumer details & address'
+                : 'Fill consumer & address details',
+            trailing: isEditMode
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                    tooltip: 'Clear form',
+                    onPressed: _resetForm,
+                  ),
           ),
 
           // ── Form Content (Clean Light Card Design) ─────────────────────────
@@ -370,57 +419,111 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ── 1. EB Number Field (xx-xxx-xxx-xxx + Unique Check) ─
-                        const Text(
-                          'EB Consumer Number *',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'EB Consumer Number *',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            if (isEditMode)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFFBFDBFE),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.lock_rounded,
+                                      size: 11,
+                                      color: Color(0xFF1D4ED8),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Unique (Locked)',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1D4ED8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _ebNumberController,
+                          readOnly: isEditMode,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            EbNumberInputFormatter(),
-                          ],
-                          onChanged: _onEbChanged,
+                          inputFormatters: isEditMode
+                              ? null
+                              : [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  EbNumberInputFormatter(),
+                                ],
+                          onChanged: isEditMode ? null : _onEbChanged,
                           decoration: InputDecoration(
                             hintText: 'xx-xxx-xxx-xxx (e.g. 07-123-004-567)',
                             hintStyle: TextStyle(
                               fontSize: 13.5,
                               color: Colors.grey.shade400,
                             ),
-                            prefixIcon: const Icon(
-                              Icons.pin_rounded,
-                              color: Color(0xFF1565C0),
+                            helperText: isEditMode
+                                ? 'EB number is unique and cannot be modified.'
+                                : null,
+                            helperStyle: const TextStyle(
+                              fontSize: 11.5,
+                              color: Color(0xFF64748B),
                             ),
-                            suffixIcon: _isCheckingEb
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Color(0xFF1565C0),
-                                      ),
-                                    ),
-                                  )
-                                : (_isEbDuplicate != null
-                                    ? Icon(
-                                        _isEbDuplicate!
-                                            ? Icons.cancel_rounded
-                                            : Icons.check_circle_rounded,
-                                        color: _isEbDuplicate!
-                                            ? Colors.red
-                                            : Colors.green,
+                            prefixIcon: Icon(
+                              isEditMode ? Icons.lock_rounded : Icons.pin_rounded,
+                              color: isEditMode
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF1565C0),
+                            ),
+                            suffixIcon: isEditMode
+                                ? null
+                                : (_isCheckingEb
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12),
+                                        child: SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Color(0xFF1565C0),
+                                          ),
+                                        ),
                                       )
-                                    : null),
+                                    : (_isEbDuplicate != null
+                                        ? Icon(
+                                            _isEbDuplicate!
+                                                ? Icons.cancel_rounded
+                                                : Icons.check_circle_rounded,
+                                            color: _isEbDuplicate!
+                                                ? Colors.red
+                                                : Colors.green,
+                                          )
+                                        : null)),
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: isEditMode
+                                ? const Color(0xFFF1F5F9)
+                                : const Color(0xFFF8FAFC),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
@@ -438,6 +541,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                             ),
                           ),
                           validator: (value) {
+                            if (isEditMode) return null;
                             if (value == null || value.trim().isEmpty) {
                               return 'EB Number is required.';
                             }
@@ -452,7 +556,7 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                         ),
 
                         // Real-time uniqueness feedback label
-                        if (_ebValidationMessage != null) ...[
+                        if (!isEditMode && _ebValidationMessage != null) ...[
                           const SizedBox(height: 6),
                           Padding(
                             padding: const EdgeInsets.only(left: 4),
@@ -702,7 +806,63 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
                         const SizedBox(height: 20),
 
-                        // ── 4. Landmark / Description (Optional) ─────────────────
+                        // ── 4. Consumer Mobile Number (Optional) ─────────────────
+                        const Text(
+                          'Consumer Mobile Number (Optional)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _mobileController,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                          decoration: InputDecoration(
+                            hintText: 'e.g. 9876543210 (10 digits)',
+                            hintStyle: TextStyle(
+                              fontSize: 13.5,
+                              color: Colors.grey.shade400,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.phone_android_rounded,
+                              color: Color(0xFF1565C0),
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF1565C0),
+                                width: 1.8,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value != null &&
+                                value.trim().isNotEmpty &&
+                                value.trim().length < 10) {
+                              return 'Please enter a valid 10-digit mobile number.';
+                            }
+                            return null;
+                          },
+                          textInputAction: TextInputAction.next,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // ── 5. Landmark / Description (Optional) ─────────────────
                         const Text(
                           'Landmark / Description (Optional)',
                           style: TextStyle(
@@ -772,13 +932,6 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                               ),
                               const SizedBox(width: 8),
                               _ScheduleChip(
-                                label: '⚡ Today',
-                                icon: Icons.today_rounded,
-                                isSelected: _isSameDay(_scheduledDate, today),
-                                onTap: () => setState(() => _scheduledDate = today),
-                              ),
-                              const SizedBox(width: 8),
-                              _ScheduleChip(
                                 label: '📅 Tomorrow',
                                 icon: Icons.wb_sunny_outlined,
                                 isSelected: _isSameDay(_scheduledDate, tomorrow),
@@ -788,13 +941,11 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                               const SizedBox(width: 8),
                               _ScheduleChip(
                                 label: _scheduledDate != null &&
-                                        !_isSameDay(_scheduledDate, today) &&
                                         !_isSameDay(_scheduledDate, tomorrow)
                                     ? DateFormat('dd MMM').format(_scheduledDate!)
                                     : 'Pick Date 📅',
                                 icon: Icons.event_note_rounded,
                                 isSelected: _scheduledDate != null &&
-                                    !_isSameDay(_scheduledDate, today) &&
                                     !_isSameDay(_scheduledDate, tomorrow),
                                 onTap: _pickScheduleDate,
                               ),
@@ -809,12 +960,14 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
 
                   // ── Submit Button ──────────────────────────────────────────
                   InkWell(
-                    onTap: _saving || _isEbDuplicate == true ? null : _saveRecord,
+                    onTap: _saving || (!isEditMode && _isEbDuplicate == true)
+                        ? null
+                        : _saveRecord,
                     borderRadius: BorderRadius.circular(18),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        gradient: _isEbDuplicate == true
+                        gradient: (!isEditMode && _isEbDuplicate == true)
                             ? LinearGradient(
                                 colors: [
                                   Colors.grey.shade400,
@@ -850,24 +1003,30 @@ class _AddRecordScreenState extends State<AddRecordScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            const Text(
-                              'Registering Record...',
-                              style: TextStyle(
+                            Text(
+                              isEditMode
+                                  ? 'Updating Record...'
+                                  : 'Registering Record...',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ] else ...[
-                            const Icon(
-                              Icons.app_registration_rounded,
+                            Icon(
+                              isEditMode
+                                  ? Icons.check_circle_rounded
+                                  : Icons.app_registration_rounded,
                               color: Colors.white,
                               size: 22,
                             ),
                             const SizedBox(width: 10),
-                            const Text(
-                              'Register EB Record',
-                              style: TextStyle(
+                            Text(
+                              isEditMode
+                                  ? 'Update EB Record'
+                                  : 'Register EB Record',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

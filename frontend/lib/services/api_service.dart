@@ -64,6 +64,37 @@ class ApiService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // PUT /api/eb-records/:id  — update existing record
+  // ─────────────────────────────────────────────────────────────────────────
+  static Future<EbRecord> updateRecord(String id, EbRecord record) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('$_baseUrl/eb-records/$id'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(record.toJson()),
+          )
+          .timeout(_timeout);
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        return EbRecord.fromJson(body['data'] as Map<String, dynamic>);
+      }
+
+      final errors = body['errors'] as List<dynamic>?;
+      final message = errors != null && errors.isNotEmpty
+          ? (errors.first as Map)['msg'] as String
+          : body['message'] as String? ?? 'Update failed.';
+      throw ApiException(message, statusCode: response.statusCode);
+    } on SocketException {
+      throw const ApiException('No internet connection or server is unreachable.');
+    } on TimeoutException {
+      throw const ApiException('Request timed out. Check your network connection.');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // PATCH /api/eb-records/:id/schedule  — set/update visit schedule
   // ─────────────────────────────────────────────────────────────────────────
   static Future<EbRecord> updateSchedule(

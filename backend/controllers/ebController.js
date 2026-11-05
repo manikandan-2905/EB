@@ -42,7 +42,7 @@ exports.createRecord = async (req, res) => {
   }
 
   try {
-    const { ebNumber, consumerName, landmarkNotes, longitude, latitude, address, scheduledDate } = req.body;
+    const { ebNumber, consumerName, mobileNumber, landmarkNotes, longitude, latitude, address, scheduledDate } = req.body;
     const cleanEb = ebNumber.trim();
 
     // Check if EB number already exists
@@ -60,6 +60,7 @@ exports.createRecord = async (req, res) => {
     const newRecord = new EbRecord({
       ebNumber: cleanEb,
       consumerName: consumerName ? consumerName.trim() : '',
+      mobileNumber: mobileNumber ? mobileNumber.trim() : '',
       landmarkNotes: landmarkNotes ? landmarkNotes.trim() : '',
       address: address ? address.trim() : '',
       scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
@@ -126,6 +127,93 @@ exports.updateSchedule = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/eb-records/:id
+// Updates an existing EB record.
+// Validates uniqueness: EB number cannot be assigned to another existing record.
+// ─────────────────────────────────────────────────────────────────────────────
+exports.updateRecord = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ success: false, errors: errors.array() });
+  }
+
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid record ID format.' });
+    }
+
+    const {
+      ebNumber,
+      consumerName,
+      mobileNumber,
+      landmarkNotes,
+      longitude,
+      latitude,
+      address,
+      scheduledDate,
+      visitStatus,
+    } = req.body;
+
+    const record = await EbRecord.findById(id);
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Record not found.' });
+    }
+
+    // If ebNumber is being modified, verify it does not conflict with another consumer's record
+    if (ebNumber) {
+      const cleanEb = ebNumber.trim();
+      const duplicate = await EbRecord.findOne({
+        ebNumber: cleanEb,
+        _id: { $ne: id },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: `EB Number "${cleanEb}" is already registered to another consumer. Duplicates are not allowed.`,
+        });
+      }
+      record.ebNumber = cleanEb;
+    }
+
+    if (consumerName !== undefined) record.consumerName = consumerName.trim();
+    if (mobileNumber !== undefined) record.mobileNumber = mobileNumber.trim();
+    if (landmarkNotes !== undefined) record.landmarkNotes = landmarkNotes.trim();
+    if (address !== undefined) record.address = address.trim();
+
+    if (scheduledDate !== undefined) {
+      record.scheduledDate = scheduledDate ? new Date(scheduledDate) : null;
+    }
+    if (visitStatus !== undefined) record.visitStatus = visitStatus;
+
+    if (
+      longitude !== undefined &&
+      latitude !== undefined &&
+      longitude !== null &&
+      latitude !== null &&
+      !isNaN(parseFloat(longitude)) &&
+      !isNaN(parseFloat(latitude))
+    ) {
+      record.location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+      };
+    }
+
+    await record.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'EB Record updated successfully.',
+      data: record,
+    });
+  } catch (error) {
+    console.error('[updateRecord]', error);
+    return res.status(500).json({ success: false, message: 'Server error while updating record.' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/eb-records/scheduled?date=YYYY-MM-DD
 // Returns house records scheduled for a particular date (or upcoming if no date).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +270,7 @@ exports.searchRecords = async (req, res) => {
       $or: [
         { ebNumber: { $regex: regex } },
         { consumerName: { $regex: regex } },
+        { mobileNumber: { $regex: regex } },
         { landmarkNotes: { $regex: regex } },
         { address: { $regex: regex } },
       ],

@@ -538,6 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
           index: index - 1,
           onDeleted: _loadAllData,
           onScheduleUpdated: _loadAllData,
+          onRecordUpdated: _loadAllData,
         );
       },
     );
@@ -593,6 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             record: rec,
                             onDeleted: _loadAllData,
                             onScheduleUpdated: _loadAllData,
+                            onRecordUpdated: _loadAllData,
                           ),
                         ),
                       ],

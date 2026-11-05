@@ -23,6 +23,13 @@ const ebRecordSchema = new mongoose.Schema(
       default: '',
     },
 
+    // Optional consumer mobile number
+    mobileNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
     // Free-text landmark or notes (e.g., "Near blue gate, second left")
     landmarkNotes: {
       type: String,
@@ -82,7 +89,7 @@ ebRecordSchema.index({ location: '2dsphere' });
 
 // Compound text index for fast search
 ebRecordSchema.index(
-  { ebNumber: 'text', consumerName: 'text', landmarkNotes: 'text', address: 'text' },
+  { ebNumber: 'text', consumerName: 'text', mobileNumber: 'text', landmarkNotes: 'text', address: 'text' },
   { name: 'eb_text_search' }
 );
 
